@@ -8,6 +8,8 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod';
 import { gql, useMutation } from '@apollo/client'
+import { useAppDispatch, useAppSelector } from '@/lib/store/hooks';
+import { loginStart, loginSuccess, loginFailure } from '@/lib/store/slice/authSlice';
 import { Form,
   FormControl,
   FormField,
@@ -17,17 +19,17 @@ import { Form,
 } from '@/components/ui/form';
 
 const LOGIN = gql`
-    mutation Login($loginInput: LoginInput!) {
-        login(loginInput: $loginInput) {
-            access_token
-            user {
-                id
-                username
-                email
-                displayName
-            }
-        }
+  mutation Login($loginInput: LoginInput!) {
+    login(loginInput: $loginInput) {
+      access_token
+      user {
+        id
+        username
+        email
+        displayName
+      }
     }
+  }
 `
 
 const formSchema = z.object({
@@ -40,8 +42,10 @@ const formSchema = z.object({
 })
 
 export default function Page() {
+  const dispatch = useAppDispatch();
   const router = useRouter()
-  const [login, { loading }] = useMutation(LOGIN);
+  const { isLoading, error } = useAppSelector(state => state.auth)
+  const [login] = useMutation(LOGIN);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -53,6 +57,8 @@ export default function Page() {
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
+      dispatch(loginStart())
+
       const { data } = await login({
         variables: {
           loginInput: {
@@ -62,13 +68,11 @@ export default function Page() {
         }
       })
 
-      console.log(data)
-
       if (data?.login) {
-        localStorage.setItem('access_token', data.login.access_token);
-        localStorage.setItem('refresh_token', data.login.refresh_token);
-        localStorage.setItem('user', JSON.stringify(data.login.user));
-
+        dispatch(loginSuccess({
+          access_token: data.login.access_token,
+          user: data.login.user,
+        }))
         router.push('/dashboard');
       }
     } catch (e) {

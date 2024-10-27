@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { ApolloWrapper } from "./ApolloWrapper";
+import StoreProvider from '@/app/StoreProvider';
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -30,7 +31,9 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ApolloWrapper>
-          {children}
+          <StoreProvider>
+            {children}
+          </StoreProvider>
         </ApolloWrapper>
       </body>
     </html>
