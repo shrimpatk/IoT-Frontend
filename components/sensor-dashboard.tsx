@@ -1,72 +1,63 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { gql, useSubscription } from '@apollo/client'
+import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { Loader } from 'lucide-react'
 
-const SENSOR_DATA = gql`
-    subscription SensorRead {
-        sensorsRead {
-            timestamp
-            devices {
-                device_id
-                last_seen
-                room
-                sensors {
-                    environmental {
-                        temperature {
-                            value
-                            unit
-                            timestamp
-                        }
-                        humidity {
-                            value
-                            unit
-                            timestamp
-                        }
-                    }
-                    air_quality {
-                        air {
-                            value
-                            unit
-                            timestamp
-                        }
-                        co {
-                            value
-                            unit
-                            timestamp
-                        }
-                    }
-                }
-                status {
-                    online
-                    rssi
-                    uptime
-                    timestamp
-                }
-            }
+// Mock data based on the provided structure
+const mockData: SensorData = {
+  timestamp: Date.now(),
+  devices: [
+    {
+      device_id: "device1",
+      last_seen: new Date().toISOString(),
+      sensors: {
+        environmental: {
+          temperature: { value: 22.5, unit: "°C", timestamp: Date.now() },
+          humidity: { value: 45, unit: "%", timestamp: Date.now() }
+        },
+        air_quality: {
+          air: { value: 50, unit: "AQI", timestamp: Date.now() },
+          co: { value: 0.5, unit: "ppm", timestamp: Date.now() }
         }
+      },
+      status: {
+        online: "true",
+        rssi: -65,
+        uptime: 3600,
+        timestamp: new Date().toISOString()
+      },
+      room: "Living Room"
+    },
+    {
+      device_id: "device2",
+      last_seen: new Date().toISOString(),
+      sensors: {
+        environmental: {
+          temperature: { value: 24, unit: "°C", timestamp: Date.now() },
+          humidity: { value: 40, unit: "%", timestamp: Date.now() }
+        },
+        air_quality: {
+          air: { value: 30, unit: "AQI", timestamp: Date.now() },
+          co: { value: 0.3, unit: "ppm", timestamp: Date.now() }
+        }
+      },
+      status: {
+        online: "true",
+        rssi: -70,
+        uptime: 7200,
+        timestamp: new Date().toISOString()
+      },
+      room: "Bedroom"
     }
-`
+  ]
+}
 
-export default function SensorDashboard() {
-  const [sensorsData, setSensorsData] = useState(null)
-  const [selectedDevice, setSelectedDevice] = useState(null)
-  const { data, loading, error } = useSubscription(SENSOR_DATA)
-
-  useEffect(() => {
-    if (data) {
-      setSensorsData(data.sensorsRead)
-      if (!selectedDevice && data.sensorsRead.devices.length > 0) {
-        setSelectedDevice(data.sensorsRead.devices[0])
-      }
-    }
-  }, [data, selectedDevice])
+export function SensorDashboardComponent() {
+  const [selectedDevice, setSelectedDevice] = useState(mockData.devices[0])
 
   const formatUptime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600)
@@ -74,11 +65,7 @@ export default function SensorDashboard() {
     return `${hours}h ${minutes}m`
   }
 
-  if (loading) return <div className="flex justify-center items-center h-screen"><Loader className="w-8 h-8 animate-spin" /></div>
-  if (error) return <div className="text-red-500">Error: {error.message}</div>
-  if (!sensorsData) return null
-
-  const chartData = selectedDevice ? [
+  const chartData = [
     {
       name: 'Temperature',
       value: selectedDevice.sensors.environmental.temperature.value,
@@ -99,23 +86,20 @@ export default function SensorDashboard() {
       value: selectedDevice.sensors.air_quality.co.value,
       unit: selectedDevice.sensors.air_quality.co.unit,
     },
-  ] : []
+  ]
 
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-3xl font-bold mb-4">Sensor Dashboard</h1>
-      <Tabs
-        value={selectedDevice?.device_id}
-        onValueChange={(value) => setSelectedDevice(sensorsData.devices.find(d => d.device_id === value))}
-      >
+      <Tabs defaultValue={selectedDevice.device_id} onValueChange={(value) => setSelectedDevice(mockData.devices.find(d => d.device_id === value) || mockData.devices[0])}>
         <TabsList>
-          {sensorsData.devices.map((device) => (
+          {mockData.devices.map((device) => (
             <TabsTrigger key={device.device_id} value={device.device_id}>
               {device.room}
             </TabsTrigger>
           ))}
         </TabsList>
-        {sensorsData.devices.map((device) => (
+        {mockData.devices.map((device) => (
           <TabsContent key={device.device_id} value={device.device_id}>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
@@ -127,9 +111,6 @@ export default function SensorDashboard() {
                   <div className="text-2xl font-bold">
                     {device.sensors.environmental.temperature.value}
                     {device.sensors.environmental.temperature.unit}
-                  </div>
-                  <div className="text-xs font-bold">
-                    {new Date(device.sensors.environmental.temperature.timestamp).toLocaleString()}
                   </div>
                 </CardContent>
               </Card>
@@ -143,9 +124,6 @@ export default function SensorDashboard() {
                     {device.sensors.environmental.humidity.value}
                     {device.sensors.environmental.humidity.unit}
                   </div>
-                  <div className="text-xs font-bold">
-                    {new Date(device.sensors.environmental.humidity.timestamp).toLocaleString()}
-                  </div>
                 </CardContent>
               </Card>
               <Card>
@@ -155,10 +133,8 @@ export default function SensorDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {device.sensors.air_quality.air.value}
-                  </div>
-                  <div className="text-xs font-bold">
-                    {new Date(device.sensors.air_quality.air.timestamp).toLocaleString()}
+                    {device.sensors.air_quality.air.value} 
+                    {device.sensors.air_quality.air.unit}
                   </div>
                 </CardContent>
               </Card>
@@ -170,9 +146,7 @@ export default function SensorDashboard() {
                 <CardContent>
                   <div className="text-2xl font-bold">
                     {device.sensors.air_quality.co.value}
-                  </div>
-                  <div className="text-xs font-bold">
-                    {new Date(device.sensors.air_quality.co.timestamp).toLocaleString()}
+                    {device.sensors.air_quality.co.unit}
                   </div>
                 </CardContent>
               </Card>
@@ -186,8 +160,8 @@ export default function SensorDashboard() {
                   <div className="space-y-2">
                     <div className="flex justify-between">
                       <span>Status:</span>
-                      <Badge variant={device.status.online === "online" ? "default" : "destructive"}>
-                        {device.status.online.toUpperCase()}
+                      <Badge variant={device.status.online === "true" ? "default" : "destructive"}>
+                        {device.status.online === "true" ? "Online" : "Offline"}
                       </Badge>
                     </div>
                     <div className="flex justify-between">
@@ -200,7 +174,7 @@ export default function SensorDashboard() {
                     </div>
                     <div className="flex justify-between">
                       <span>Last Seen:</span>
-                      <span>{new Date(sensorsData.timestamp).toLocaleString()}</span>
+                      <span>{new Date(device.last_seen).toLocaleString()}</span>
                     </div>
                   </div>
                 </CardContent>

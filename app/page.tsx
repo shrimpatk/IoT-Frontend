@@ -7,9 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useForm } from 'react-hook-form';
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod';
-import { gql, useMutation } from '@apollo/client'
-import { useAppDispatch, useAppSelector } from '@/lib/store/hooks';
-import { loginStart, loginSuccess, loginFailure } from '@/lib/store/slice/authSlice';
+import { gql } from '@apollo/client'
 import { Form,
   FormControl,
   FormField,
@@ -17,6 +15,7 @@ import { Form,
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { useAuth } from '@/contexts/AuthContext';
 
 const LOGIN = gql`
   mutation Login($loginInput: LoginInput!) {
@@ -42,10 +41,7 @@ const formSchema = z.object({
 })
 
 export default function Page() {
-  const dispatch = useAppDispatch();
-  const router = useRouter()
-  const { isLoading, error } = useAppSelector(state => state.auth)
-  const [login] = useMutation(LOGIN);
+  const { login } = useAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -57,24 +53,10 @@ export default function Page() {
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      dispatch(loginStart())
-
-      const { data } = await login({
-        variables: {
-          loginInput: {
-            username: values.username,
-            password: values.password,
-          }
-        }
+      await login({
+        username: values.username,
+        password: values.password,
       })
-
-      if (data?.login) {
-        dispatch(loginSuccess({
-          access_token: data.login.access_token,
-          user: data.login.user,
-        }))
-        router.push('/dashboard');
-      }
     } catch (e) {
       console.error(e)
     }

@@ -31,7 +31,6 @@ const REFRESH_TOKEN = gql`
   }
 `;
 
-
 // Separate refresh client to avoid circular dependency
 const createRefreshClient = () => new ApolloClient({
   link: new HttpLink({
@@ -47,9 +46,10 @@ const refreshToken = async () => {
     const { data } = await refreshClient.mutate<RefreshResponse>({
       mutation: REFRESH_TOKEN
     });
+    console.log(data?.refreshTokens.access_token)
     return data?.refreshTokens.access_token;
   } catch (error) {
-    throw error;
+    console.log(error)
   } finally {
     refreshClient.stop();
   }
@@ -63,6 +63,13 @@ function makeClient() {
 
   const wsLink = new GraphQLWsLink(createClient({
     url: 'ws://localhost:3000/graphql',
+    connectionParams: () => {
+      const token = localStorage.getItem('access_token')
+      console.log('token', token);
+      return {
+        Authorization: token ? `Bearer ${token}` : ''
+      }
+    }
   }));
 
   const authLink = setContext((_, { headers }) => {
