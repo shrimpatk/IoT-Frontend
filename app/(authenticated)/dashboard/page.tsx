@@ -5,9 +5,9 @@ import { gql, useSubscription } from '@apollo/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { Loader } from 'lucide-react'
+import { AlertCircle, Loader, WifiOff } from 'lucide-react' // Added icons
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert" // Add this UI component if you haven't
 
 const SENSOR_DATA = gql`
     subscription SensorRead {
@@ -54,10 +54,99 @@ const SENSOR_DATA = gql`
     }
 `
 
+const LoadingSkeleton = () => (
+  <div className="container mx-auto p-4">
+    <div className="h-8 w-48 bg-gray-200 rounded animate-pulse mb-4"/>
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {[1, 2, 3, 4].map((i) => (
+        <Card key={i} className="animate-pulse">
+          <CardHeader>
+            <div className="h-4 w-24 bg-gray-200 rounded"/>
+          </CardHeader>
+          <CardContent>
+            <div className="h-8 w-16 bg-gray-200 rounded"/>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  </div>
+)
+
+const ErrorDisplay = ({ message }: { message: string }) => (
+  <div className="container mx-auto p-4">
+    <Alert variant="destructive">
+      <AlertCircle className="h-4 w-4" />
+      <AlertTitle>Error</AlertTitle>
+      <AlertDescription>
+        {message}
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-2 px-4 py-2 bg-red-100 text-red-800 rounded hover:bg-red-200"
+        >
+          Try Again
+        </button>
+      </AlertDescription>
+    </Alert>
+  </div>
+)
+
+const NoDataDisplay = () => (
+  <div className="container mx-auto p-4">
+    <Alert>
+      <WifiOff className="h-4 w-4" />
+      <AlertTitle>No Data Available</AlertTitle>
+      <AlertDescription>
+        No sensor data is currently available. This might be due to connection issues or sensor downtime.
+      </AlertDescription>
+    </Alert>
+  </div>
+)
+
+const validateSensorData = (data: any) => {
+  if (!data?.devices?.length) return false;
+
+  return data.devices.every((device: any) => {
+    const temp = device.sensors?.environmental?.temperature;
+    const humidity = device.sensors?.environmental?.humidity;
+
+    return (
+      temp?.value != null &&
+      humidity?.value != null &&
+      temp.value >= -50 && temp.value <= 100 && // reasonable temperature range
+      humidity.value >= 0 && humidity.value <= 100 // humidity percentage
+    );
+  });
+}
+
 export default function SensorDashboard() {
   const [sensorsData, setSensorsData] = useState(null)
   const [selectedDevice, setSelectedDevice] = useState(null)
-  const { data, loading, error } = useSubscription(SENSOR_DATA)
+  const [lastValidData, setLastValidData] = useState(null)
+  const [connectionStatus, setConnectionStatus] = useState('connecting')
+  const { data, loading, error } = useSubscription(SENSOR_DATA, {
+    onError: (error) => {
+      console.error('Subscription error: ', error)
+      setConnectionStatus('error')
+    },
+    onData: ({ data }) => {
+      if (!data?.sensorsRead) {
+        console.warn('Received empty data');
+        return;
+      }
+
+      if (validateSensorData(data.sensorsRead)) {
+        setSensorsData(data.sensorsRead);
+        setLastValidData(data.sensorsRead);
+        setConnectionStatus('connected');
+      } else {
+        console.warn('Received invalid sensor data');
+        // Keep showing last valid data if available
+        if (lastValidData) {
+          setSensorsData(lastValidData);
+        }
+      }
+    }
+  });
 
   useEffect(() => {
     if (data) {
@@ -74,9 +163,9 @@ export default function SensorDashboard() {
     return `${hours}h ${minutes}m`
   }
 
-  if (loading) return <div className="flex justify-center items-center h-screen"><Loader className="w-8 h-8 animate-spin" /></div>
-  if (error) return <div className="text-red-500">Error: {error.message}</div>
-  if (!sensorsData) return null
+  if (loading) return <LoadingSkeleton />
+  if (error) return <ErrorDisplay message={error.message}/>
+  if (!sensorsData) return <NoDataDisplay />
 
   const chartData = selectedDevice ? [
     {
@@ -103,6 +192,16 @@ export default function SensorDashboard() {
 
   return (
     <div className="container mx-auto p-4">
+      {connectionStatus === 'error' && (
+        <Alert className="mb-4" variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Connection Error</AlertTitle>
+          <AlertDescription>
+            There was an error connecting to the sensor network. Data might be stale.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <h1 className="text-3xl font-bold mb-4">Sensor Dashboard</h1>
       <Tabs
         value={selectedDevice?.device_id}

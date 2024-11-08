@@ -63,13 +63,6 @@ function makeClient() {
 
   const wsLink = new GraphQLWsLink(createClient({
     url: 'ws://localhost:3000/graphql',
-    connectionParams: () => {
-      const token = localStorage.getItem('access_token')
-      console.log('token', token);
-      return {
-        Authorization: token ? `Bearer ${token}` : ''
-      }
-    }
   }));
 
   const authLink = setContext((_, { headers }) => {
@@ -134,14 +127,12 @@ function makeClient() {
       );
     },
     wsLink,
-    httpLink,
+    from([errorLink, authLink, httpLink]),
   );
-
-  const link = from([errorLink, authLink, splitLink]);
 
   return new ApolloClient({
     cache: new InMemoryCache(),
-    link: link,
+    link: splitLink,
     defaultOptions: {
       query: {
         fetchPolicy: 'network-only',
