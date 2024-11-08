@@ -1,13 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { gql, useSubscription } from '@apollo/client'
+import { gql, useMutation, useSubscription, useQuery } from '@apollo/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { AlertCircle, Loader, WifiOff } from 'lucide-react' // Added icons
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert" // Add this UI component if you haven't
+import { AlertCircle, WifiOff } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  Select,
+  SelectItem,
+  SelectContent,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select"
 
 const SENSOR_DATA = gql`
     subscription SensorRead {
@@ -51,6 +58,18 @@ const SENSOR_DATA = gql`
                 }
             }
         }
+    }
+`
+
+const UPDATE_THROTTLE = gql`
+    mutation UpdateThrottleTime($time: Int!) {
+        updateThrottleTime(time: $time)
+    }
+`;
+
+const GET_THROTTLE = gql`
+    query getThrottleTime {
+        getThrottleTime
     }
 `
 
@@ -123,17 +142,16 @@ export default function SensorDashboard() {
   const [selectedDevice, setSelectedDevice] = useState(null)
   const [lastValidData, setLastValidData] = useState(null)
   const [connectionStatus, setConnectionStatus] = useState('connecting')
+  const [currentThrottle, setCurrentThrottle] = useState('2000');
+
+  const { data: throttleData } = useQuery(GET_THROTTLE);
+  const [updateThrottle] = useMutation(UPDATE_THROTTLE)
   const { data, loading, error } = useSubscription(SENSOR_DATA, {
     onError: (error) => {
       console.error('Subscription error: ', error)
       setConnectionStatus('error')
     },
     onData: ({ data }) => {
-      if (!data?.sensorsRead) {
-        console.warn('Received empty data');
-        return;
-      }
-
       if (validateSensorData(data.sensorsRead)) {
         setSensorsData(data.sensorsRead);
         setLastValidData(data.sensorsRead);
@@ -156,6 +174,12 @@ export default function SensorDashboard() {
       }
     }
   }, [data, selectedDevice])
+
+  useEffect(() => {
+    if (throttleData?.getThrottleTime) {
+      setCurrentThrottle(String(throttleData.getThrottleTime));
+    }
+  }, [throttleData]);
 
   const formatUptime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600)
@@ -189,6 +213,18 @@ export default function SensorDashboard() {
       unit: selectedDevice.sensors.air_quality.co.unit,
     },
   ] : []
+
+  const handleThrottleChange = async (newTime: number) => {
+    try {
+      await updateThrottle({
+        variables: {
+          time: newTime
+        }
+      })
+    } catch (e) {
+      console.error('Failed to update throttle:', e);
+    }
+  }
 
   return (
     <div className="container mx-auto p-4">
@@ -285,7 +321,7 @@ export default function SensorDashboard() {
                   <div className="space-y-2">
                     <div className="flex justify-between">
                       <span>Status:</span>
-                      <Badge variant={device.status.online === "online" ? "default" : "destructive"}>
+                      <Badge variant={device.status.online === 'online' ? 'default' : 'destructive'}>
                         {device.status.online.toUpperCase()}
                       </Badge>
                     </div>
@@ -325,6 +361,23 @@ export default function SensorDashboard() {
           </TabsContent>
         ))}
       </Tabs>
+      <Select value={currentThrottle} onValueChange={async (value) => {
+        setCurrentThrottle(value);
+        await handleThrottleChange(Number(value));
+      }}>
+        <SelectTrigger className="mt-4 w-[180px] font-bold text-xs">
+          <SelectValue placeholder="Throttle Rate" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="1000">Throttle Rate: 1s</SelectItem>
+          <SelectItem value="2000">Throttle Rate: 2s</SelectItem>
+          <SelectItem value="3000">Throttle Rate: 3s</SelectItem>
+          <SelectItem value="5000">Throttle Rate: 5s</SelectItem>
+          <SelectItem value="10000">Throttle Rate: 10s</SelectItem>
+          <SelectItem value="15000">Throttle Rate: 15s</SelectItem>
+          <SelectItem value="30000">Throttle Rate: 30s</SelectItem>
+        </SelectContent>
+      </Select>
     </div>
   )
 }
